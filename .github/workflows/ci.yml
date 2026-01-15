@@ -54,14 +54,17 @@ jobs:
             sleep 2
           done
 
-      - name: Run migrations (test)
+      - name: Create database + run migrations (test)
         env:
           APP_ENV: test
-          DATABASE_URL: "mysql://root:root@127.0.0.1:3315/trellodb_test?serverVersion=8.0.32&charset=utf8mb4"
-        run: php bin/console doctrine:migrations:migrate --env=test --no-interaction
+          DATABASE_URL: "mysql://root:root@127.0.0.1:3315/trellodb?serverVersion=8.0.32&charset=utf8mb4"
+        run: |
+          php bin/console doctrine:database:create --env=test --if-not-exists --no-interaction
+          php bin/console doctrine:migrations:migrate --env=test --no-interaction
+
 
       - name: Run tests
         env:
           APP_ENV: test
-          DATABASE_URL: "mysql://root:root@127.0.0.1:3315/trellodb_test?serverVersion=8.0.32&charset=utf8mb4"
+          DATABASE_URL: "mysql://root:root@127.0.0.1:3315/trellodb?serverVersion=8.0.32&charset=utf8mb4"
         run: php bin/phpunit
