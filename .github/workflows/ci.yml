@@ -1,13 +1,12 @@
-name: CI Symfony
+name: CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "master" ]
 
 jobs:
-  tests:
+  test:
     runs-on: ubuntu-latest
 
     services:
@@ -16,55 +15,48 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: trellodb_test
+          MYSQL_USER: trellouser
+          MYSQL_PASSWORD: trellopwd
         ports:
-          - 3315:3306
+          - 3313:3306
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=30
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.1"
-          extensions: mbstring, pdo, pdo_mysql
+          php-version: "8.3"
+          extensions: mbstring, intl, pdo_mysql
           coverage: none
 
       - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist --no-scripts
-
-      - name: Create .env for CI
-        run: |
-          echo "APP_ENV=test" > .env
-          echo "APP_DEBUG=1" >> .env
-          echo "APP_SECRET=ci_secret" >> .env
-
+        run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Wait for MySQL
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mysql-client
-          until mysql -h 127.0.0.1 -P 3315 -uroot -proot -e "SELECT 1"; do
-            echo "Waiting for MySQL..."
+          for i in {1..30}; do
+            mysqladmin ping -h 127.0.0.1 -uroot -proot && break
             sleep 2
           done
 
-      - name: Create database + run migrations (test)
+      - name: Prepare test database
         env:
           APP_ENV: test
-          DATABASE_URL: "mysql://root:root@127.0.0.1:3315/trellodb?serverVersion=8.0.32&charset=utf8mb4"
+          DATABASE_URL: "mysql://trellouser:trellopwd@127.0.0.1:3306/trellodb_test?serverVersion=8.0&charset=utf8mb4"
         run: |
-          php bin/console doctrine:database:create --env=test --if-not-exists --no-interaction
-          php bin/console doctrine:migrations:migrate --env=test --no-interaction
-
+          php bin/console doctrine:database:create --if-not-exists
+          php bin/console doctrine:schema:drop --force
+          php bin/console doctrine:schema:create
 
       - name: Run tests
         env:
           APP_ENV: test
-          DATABASE_URL: "mysql://root:root@127.0.0.1:3315/trellodb?serverVersion=8.0.32&charset=utf8mb4"
+          DATABASE_URL: "mysql://trellouser:trellopwd@127.0.0.1:3306/trellodb_test?serverVersion=8.0&charset=utf8mb4"
         run: php bin/phpunit
